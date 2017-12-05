@@ -9,8 +9,8 @@
 import UIKit
 import Foundation
 import CoreLocation
-
-class ViewController: UIViewController, CLLocationManagerDelegate{
+import CoreBluetooth
+class ViewController: UIViewController, CLLocationManagerDelegate, CBCentralManagerDelegate{
     @IBOutlet var Status: UILabel!
     @IBOutlet var UUID: UILabel!
     @IBOutlet var Major: UILabel!
@@ -19,16 +19,21 @@ class ViewController: UIViewController, CLLocationManagerDelegate{
     
     
     //UUIDからNSUUIDを作成
+    let services = [CBUUID(string: "FEAA")]
     var proximityUUID:NSUUID? = NSUUID(uuidString:"78907890-7890-7890-7890-789078907890")
     var region: CLBeaconRegion!
     var locationManager: CLLocationManager!
-    
+    var centralManager: CBCentralManager!
+    var peripheral: CBPeripheral!
+
     override func viewDidLoad() {
         super.viewDidLoad()
         self.locationManager = CLLocationManager()
         self.locationManager.delegate = self
+        self.centralManager = CBCentralManager(delegate: self,queue: nil)
         //CLBeaconRegionを生成
         self.region = CLBeaconRegion(proximityUUID:proximityUUID! as UUID, identifier:"EstimateRegion")
+        centralManager.scanForPeripherals(withServices: services, options: nil)
         self.UUID.text = proximityUUID?.uuidString
         //デリゲートの設定
         locationManager.delegate = self
@@ -75,6 +80,44 @@ class ViewController: UIViewController, CLLocationManagerDelegate{
         self.Status.text = "Scanning..."
     }
     
+    func centralManagerDidUpdateState(_ central: CBCentralManager) {
+        print("state: \(central.state)")
+    }
+    
+    func centralManager(
+        central: CBCentralManager,
+        didDiscoverPeripheral peripheral: CBPeripheral,
+        advertisementData: [String : AnyObject],
+        RSSI: NSNumber)
+    {
+        let serviceData = advertisementData[CBAdvertisementDataServiceDataKey] as? [CBUUID : NSData]
+        
+        let eddystoneServiceData = serviceData![CBUUID(string: "FEAA")]
+        
+    }
+    enum EddystoneFrameType {
+        case UID
+        case URL
+        case TLM
+        case Unknown
+    }
+     func frameTypeForEddystoneServiceData(data: NSData) -> EddystoneFrameType {
+        
+        var bytes = [UInt8](repeating: 0, count: data.length)
+        data.getBytes(&bytes, length: data.length)
+        let firstByte = bytes[0]
+        
+        if firstByte == 0x00 {
+            return .UID
+        }
+        else if firstByte == 0x10 {
+            return .URL
+        }
+        else if firstByte == 0x20 {
+            return .TLM
+        }
+        return .Unknown
+    }
     /*
      - (void)locationManager:(CLLocationManager *)manager didDetermineState:(CLRegionState)state forRegion:(CLRegion *)region
      Parameters
